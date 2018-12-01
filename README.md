@@ -6,3 +6,7 @@ renderdude renders many images, renders even objects, wow
 get renderdude todaaaayyyyyy
 *warning renderdude may not work as intended, may explode in usage,
 may render your objects high on drugs, not responsible for rendering bad images, renderdude just renders, not ask.*
+
+-Dependencies of Renderdude:
+
+* GCC: Uh any current one will do yeah
