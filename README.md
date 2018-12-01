@@ -10,3 +10,7 @@ may render your objects high on drugs, not responsible for rendering bad images,
 -Dependencies of Renderdude:
 
 * GCC: Uh any current one will do yeah
+
+-How to Compile Renderdude:
+
+Right now just run build.bat should do yeah
