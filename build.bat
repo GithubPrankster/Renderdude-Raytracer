@@ -1,1 +1,2 @@
-g++ -o renderdude main.cpp
+g++ -o renderdude main.cpp 
+renderdude.exe
