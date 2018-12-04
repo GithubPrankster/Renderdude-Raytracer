@@ -23,23 +23,22 @@ LRESULT CALLBACK MainWindowCallback(HWND Window, UINT Message, WPARAM WParam, LP
 			OutputDebugStringA("WM_ACTIVATEAPP/n");
 		}break;
         
-        case WM_PAINT:
-        {
-            
-        }
+		case WM_PAINT:
+		{
+
+		}break;
 		
 		default:
 		{
 			OutputDebugStringA("Default/n");
-            Result = DefWindowProc(Window, Message, WParam, LParam);
+            		Result = DefWindowProc(Window, Message, WParam, LParam);
 		}break;
 	}
 	
 	return(Result);
 }
 
-int CALLBACK
-WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowCode){
+int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowCode){
 	WNDCLASS WindowClass = {};
 	
 	WindowClass.style = CS_OWNDC|CS_HREDRAW|CS_VREDRAW;
@@ -48,35 +47,34 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
 	//WindowClass.hIcon =;
 	WindowClass.lpszClassName = "RenderdudeWinClass";
     
-    if(RegisterClass(&WindowClass)){
-        HWND WindowHandle =
-            CreateWindowEx(
-            0,
-            WindowClass.lpszClassName,
-            "Renderdude",
-            WS_OVERLAPPEDWINDOW|WS_VISIBLE,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            0,
-            0,
-            Instance,
-            0
-            );
-        if(WindowHandle)
-            for(;;){
-            MSG Message;
-            BOOL MessageResult =GetMessage(&Message, 0, 0, 0);
-            if(MessageResult >0){
-                TranslateMessage(&Message);
-                DispatchMessage(&Message);
-            }else{
-                break;
-            }
-        }
-    }
-    
-    
-    return(0);
+	if(RegisterClass(&WindowClass)){
+		HWND WindowHandle =
+		    CreateWindowEx(
+		    0,
+		    WindowClass.lpszClassName,
+		    "Renderdude",
+		    WS_OVERLAPPEDWINDOW|WS_VISIBLE,
+		    CW_USEDEFAULT,
+		    CW_USEDEFAULT,
+		    CW_USEDEFAULT,
+		    CW_USEDEFAULT,
+		    0,
+		    0,
+		    Instance,
+		    0
+		    );
+		if(WindowHandle){
+		    for(;;){
+		       MSG Message;
+		       BOOL MessageResult = GetMessage(&Message, 0, 0, 0);
+		       if(MessageResult >0){
+			   TranslateMessage(&Message);
+			   DispatchMessage(&Message);
+		       }else{
+		          break;
+		       }
+		    }
+	         }
+         }
+         return(0);
 }
