@@ -10,6 +10,7 @@ may render your objects high on drugs, not responsible for rendering bad images,
 -Dependencies of Renderdude:
 
 * GCC: Uh any current one will do yeah
+* Windows: I think Vista/7 and beyond yeah
 
 -How to Compile Renderdude:
 
