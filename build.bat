@@ -1,2 +1,1 @@
-g++ -o renderdude main.cpp 
-renderdude.exe
+g++ -std=c++17 main.cpp
