@@ -1,5 +1,5 @@
 # Renderdude: Raytracer
-A raytracer. No lightning. Sorry.
+A raytracer.
 
 -Dependencies of Renderdude: Raytracer
 
@@ -10,8 +10,8 @@ A raytracer. No lightning. Sorry.
 
 Run build.bat.
 
-# Why is there no lightning
-Idk how to lightning sorry
+# Woah there is lightning now
+I read scratch-a-pixel.
 
-# Does it run fast
-I put in a small timer with chrono so you can see how much time it takes to run things
+# Does it run fast?
+I put in a small timer with chrono so you can see how much time it takes to run things.
