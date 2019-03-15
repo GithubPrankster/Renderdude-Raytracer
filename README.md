@@ -7,6 +7,7 @@ A raytracer. No lightning. Sorry.
 * Nothings' stb_image_write is used.
 
 -How to Compile Renderdude: Raytracer
+
 Run build.bat.
 
 # Why is there no lightning
