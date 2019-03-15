@@ -1,5 +1,5 @@
 # Renderdude: Raytracer
-A raytracer.
+A raytracer. No lightning. Sorry.
 
 -Dependencies of Renderdude: Raytracer
 
