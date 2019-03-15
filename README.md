@@ -14,4 +14,4 @@ Run build.bat.
 Idk how to lightning sorry
 
 # Does it run fast
-I put in a small timer with chrono so you can see how much time it runs things
+I put in a small timer with chrono so you can see how much time it takes to run things
