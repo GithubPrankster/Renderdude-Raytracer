@@ -23,15 +23,6 @@ struct Vec{
 		return Vec(x * o, y * o, z * o);
 	}
 	
-	Vec operator/ (double o){
-		return Vec(x / o, y / o, z / o);
-	}
-	
-	bool operator< (double o){
-		if(x < o && y < o && z < o) return true;
-		else return false;
-	}
-	
 	Vec operator- (Vec o){
 		return Vec(x - o.x, y - o.y, z - o.z);
 	}
@@ -63,14 +54,11 @@ struct RGB{
 	RGB(unsigned char c, unsigned char y, unsigned char m) : r(c), g(y), b(m){}
 	RGB() = default;
 	
-	RGB operator* (double o){
-		return RGB(std::clamp(r * o, 0.0, 255.0), std::clamp(g * o, 0.0, 255.0), std::clamp(b * o, 0.0, 255.0));
-	}
 };
 
 struct Material{
-	RGB color;
-	Material(RGB diffuse) : color(diffuse){}
+	Vec color;
+	Material(Vec diffuse) : color(diffuse){}
 	Material() = default;
 };
 
@@ -93,10 +81,6 @@ struct Sphere{
 		if (t0 < 0) return false;
 		return true;
 	}
-	
-	Vec getNormal(Vec pi){
-		return (pi - pos) / radius;
-	}
 };
 
 struct Light{
@@ -116,59 +100,44 @@ bool sceneIntersection(Vec orig, Vec dir, std::vector<Sphere> spheres, Vec &hitP
 			objMat = spheres[i].material;
 		}
 	}
-	double checkerboard_dist = std::numeric_limits<double>::max();
-    if (fabs(dir.y)>1e-3)  {
-        double d = -(orig.y+5)/dir.y; // the checkerboard plane has equation y = -4
-        Vec pt = orig + dir*d;
-        if (d>0 && fabs(pt.x)<10 && pt.z<-10 && pt.z>-30 && d<sphere_dist) {
-            checkerboard_dist = d;
-            hitPos = pt;
-            normal = Vec(0,1,0);
-            objMat.color = (int(.5*hitPos.x+1000) + int(.5*hitPos.z)) & 1 ? RGB(255,255,255) : RGB(83, 255, 50);
-        }
-    }
-    return std::min(sphere_dist, checkerboard_dist)<1000;
+    return sphere_dist<1000;
 }
 
-RGB cast_ray(Vec orig, Vec dir, std::vector<Sphere> spheres, std::vector<Light> lights) {
+Vec cast_ray(Vec orig, Vec dir, std::vector<Sphere> spheres, std::vector<Light> lights) {
 	//Hit point, normal and obj's color are used for funny shader thingies 
     Vec hitPoint, Normal;
 	Material obtMat;
 	
     if (!sceneIntersection(orig, dir, spheres, hitPoint, Normal, obtMat)) {
-        return RGB(10, 50, 60); // BG color!
+        return Vec(0.5, 0.6, 5.0); // BG color!
     }
-	double totalIntensity = 0.0;
-	for(size_t q = 0; q < lights.size(); q++){
-		Vec light_dir = (lights[q].pos - hitPoint).normalize();
-		double light_dist = (lights[q].pos - hitPoint).length();
-		Vec shadow_orig = (Normal * light_dist) < 0 ? hitPoint - Normal * 1e-3 : hitPoint + Normal * 1e-3;
-        Vec shadow_pt, shadow_N;
-        Material tmpmaterial;
-        if (sceneIntersection(shadow_orig, light_dir, spheres, shadow_pt, shadow_N, tmpmaterial) && (shadow_pt-shadow_orig).length() < light_dist)
-			totalIntensity  += lights[q].intensity * std::max(0.0, light_dir.dot(Normal));
-		else totalIntensity = 0.5;	
-	}
-	RGB fullColor = obtMat.color * totalIntensity;
-    return fullColor;
+	double diffuse_light_intensity = 0.0;
+	for (size_t i=0; i<lights.size(); i++) {
+        Vec light_dir = (lights[i].pos - hitPoint).normalize();
+        diffuse_light_intensity  += lights[i].intensity * std::max(0.0, light_dir.dot(Normal));
+    }
+    return obtMat.color;
+}
+
+RGB convertVec(Vec d){
+	return RGB(std::round(d.x * 255.0), std::round(d.y * 255.0), std::round(d.z * 255.0));
 }
 
 int main() {
    RGB data[width * height];
    
-   Material reddy(RGB(128, 70, 70));
-   Material bluey(RGB(40, 70, 128));
-   Material greeny(RGB(70, 128, 40));
+   Material reddy(Vec(0.5, 0.2, 0.3));
+   Material bluey(Vec(0.2, 0.3, 0.5));
+   Material greeny(Vec(0.3, 0.5, 0.2));
    
    std::vector<Sphere> spheres;
    spheres.push_back(Sphere(Vec(0, 0, -14), 2, reddy));
    spheres.push_back(Sphere(Vec(1, 1.2, -17), 2, bluey));
    spheres.push_back(Sphere(Vec(-2, 2, -5), 1.2, greeny));
-   spheres.push_back(Sphere(Vec(1.2, -2, -10), 1.8, reddy));
    
    std::vector<Light> lights;
    lights.push_back(Light(Vec(-1, 2, -7), 1.0));
-   
+
    double fov = 3.141596 / 4.0;
 
    for(int i = 0; i < width;  i++){
@@ -177,7 +146,7 @@ int main() {
 		   double x =  (2*(i + 0.5)/(double)width  - 1)*tan(fov/2.)*width/(double)height;
            double y = -(2*(j + 0.5)/(double)height - 1)*tan(fov/2.);
            Vec dir = Vec(x, y, -1).normalize();
-		   data[currentPos] = cast_ray(Vec(0, 0.8, 0), dir, spheres, lights);
+		   data[currentPos] = convertVec(cast_ray(Vec(), dir, spheres, lights));
 	   }
    }
    stbi_write_png("woah.png", width, height, 3, &data, 0);
