@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <chrono>
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
@@ -19,6 +20,10 @@ struct Vec{
 		return Vec(x + o.x, y + o.y, z + o.z);
 	}
 	
+	Vec operator+ (double o){
+		return Vec(x + o, y + o, z + o);
+	}
+	
 	Vec operator* (double o){
 		return Vec(x * o, y * o, z * o);
 	}
@@ -30,7 +35,7 @@ struct Vec{
 	double dot(Vec o){
 		return (x * o.x + y * o.y + z * o.z);
 	}
-	//Since
+	
 	double square(){
 		Vec self(x, y, z);
 		return self.dot(self);
@@ -83,38 +88,23 @@ struct Sphere{
 	}
 };
 
-struct Light{
-	Vec pos;
-	double intensity;
-	Light(Vec p, double i) : pos(p), intensity(i) {}
-};
-
-bool sceneIntersection(Vec orig, Vec dir, std::vector<Sphere> spheres, Vec &hitPos, Vec &normal, Material &objMat){
+bool sceneIntersection(Vec orig, Vec dir, std::vector<Sphere> spheres, Material &objMat){
 	double sphere_dist = std::numeric_limits<double>::max();
 	for(size_t i = 0; i < spheres.size(); i++){
 		double dist_i;
 		if(spheres[i].intersect(orig, dir, dist_i) && dist_i < sphere_dist){
 			sphere_dist = dist_i;
-			hitPos = orig + dir * dist_i;
-			normal = (hitPos - spheres[i].pos).normalize();
 			objMat = spheres[i].material;
 		}
 	}
     return sphere_dist<1000;
 }
 
-Vec cast_ray(Vec orig, Vec dir, std::vector<Sphere> spheres, std::vector<Light> lights) {
-	//Hit point, normal and obj's color are used for funny shader thingies 
-    Vec hitPoint, Normal;
+Vec cast_ray(Vec orig, Vec dir, std::vector<Sphere> spheres) {
 	Material obtMat;
 	
-    if (!sceneIntersection(orig, dir, spheres, hitPoint, Normal, obtMat)) {
+    if (!sceneIntersection(orig, dir, spheres, obtMat)) {
         return Vec(0.5, 0.6, 5.0); // BG color!
-    }
-	double diffuse_light_intensity = 0.0;
-	for (size_t i=0; i<lights.size(); i++) {
-        Vec light_dir = (lights[i].pos - hitPoint).normalize();
-        diffuse_light_intensity  += lights[i].intensity * std::max(0.0, light_dir.dot(Normal));
     }
     return obtMat.color;
 }
@@ -134,22 +124,29 @@ int main() {
    spheres.push_back(Sphere(Vec(0, 0, -14), 2, reddy));
    spheres.push_back(Sphere(Vec(1, 1.2, -17), 2, bluey));
    spheres.push_back(Sphere(Vec(-2, 2, -5), 1.2, greeny));
-   
-   std::vector<Light> lights;
-   lights.push_back(Light(Vec(-1, 2, -7), 1.0));
+   spheres.push_back(Sphere(Vec(3, -3, -10), 2.1, greeny));
 
    double fov = 3.141596 / 4.0;
+   auto timeThen = std::chrono::system_clock::now(), timeNow = std::chrono::system_clock::now();
+   float elapsedTime = 0.0f;
 
    for(int i = 0; i < width;  i++){
 	   for(int j = 0; j < height; j++){
+		   timeNow = std::chrono::system_clock::now();
+		   std::chrono::duration<float> deltaChrono = timeNow - timeThen;
+		   timeThen = timeNow;
+		   float deltaTime = deltaChrono.count();
+		
 		   int currentPos = i + j * width;
 		   double x =  (2*(i + 0.5)/(double)width  - 1)*tan(fov/2.)*width/(double)height;
            double y = -(2*(j + 0.5)/(double)height - 1)*tan(fov/2.);
            Vec dir = Vec(x, y, -1).normalize();
-		   data[currentPos] = convertVec(cast_ray(Vec(), dir, spheres, lights));
+		   data[currentPos] = convertVec(cast_ray(Vec(), dir, spheres));
+		   
+		   elapsedTime += deltaTime;
 	   }
    }
-   stbi_write_png("woah.png", width, height, 3, &data, 0);
+   stbi_write_png("render.png", width, height, 3, &data, 0);
+   std::cout << elapsedTime << std::endl;
    return 0;
 }
-
