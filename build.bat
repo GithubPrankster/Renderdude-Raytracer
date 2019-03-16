@@ -1,1 +1,1 @@
-g++ -std=c++17 main.cpp
+g++ -std=c++17 -Iglm -fopenmp main.cpp
