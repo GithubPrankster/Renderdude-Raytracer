@@ -10,8 +10,11 @@ A raytracer.
 
 Run build.bat.
 
-# Woah there is lightning now
-I read scratch-a-pixel.
+-Features
+
+* Lightning (y'all wanted it)
+* Reflections (comes with free artifacting)
+* One plane (that's all you get. don't ask me for more. i'm out of planes.)
 
 # Does it run fast?
 I put in a small timer with chrono so you can see how much time it takes to run things.
