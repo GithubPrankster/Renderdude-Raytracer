@@ -8,51 +8,13 @@
 #define STBI_MSC_SECURE_CRT
 #include "stb_image_write.h"
 
-const int width = 640, height = 480;
+#include <glm/glm.hpp>
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/transform.hpp>
+#include <glm/gtx/euler_angles.hpp>
 
-//The vector class, a joint effort between brain and cube.
-struct Vec{
-	double x = 0.0, y = 0.0, z = 0.0;
-	
-	Vec(double q, double w, double e) : x(q), y(w), z(e){}
-	Vec() = default;	
-	
-	Vec operator+ (Vec o){
-		return Vec(x + o.x, y + o.y, z + o.z);
-	}
-	
-	Vec operator+ (double o){
-		return Vec(x + o, y + o, z + o);
-	}
-	
-	Vec operator* (double o){
-		return Vec(x * o, y * o, z * o);
-	}
-	
-	Vec operator- (Vec o){
-		return Vec(x - o.x, y - o.y, z - o.z);
-	}
-	
-	double dot(Vec o){
-		return (x * o.x + y * o.y + z * o.z);
-	}
-	
-	double square(){
-		Vec self(x, y, z);
-		return self.dot(self);
-	}
-	
-	double length(){
-		Vec self(x, y, z);
-		//Sorry for the sqrtf if you're into the quick one. May implement that latter? IDK!
-		return sqrtf(self.square());
-	}
-	
-	Vec normalize(){
-		Vec self(x, y, z);
-		return Vec(x * (1.0 / self.length()), y * (1.0 / self.length()), z * (1.0 / self.length()));
-	};
-};
+const int width = 640, height = 480;
 
 struct RGB{
 	unsigned char r = 0, g = 0, b = 0;
@@ -63,38 +25,41 @@ struct RGB{
 };
 
 struct Material{
-	Vec color;
-	Material(Vec diffuse) : color(diffuse){}
+	glm::vec3 color;
+	float specualirity;
+	bool reflective;
+	Material(glm::vec3 diffuse, float specular, bool reflect) : color(diffuse), specualirity(specular), reflective(reflect) {}
 	Material() = default;
 };
 
 struct Light{
-	Vec pos;
-	double intensity;
-	Light(Vec p, double i) : pos(p), intensity(i) {}
+	glm::vec3 pos;
+	glm::vec3 color;
+	float intensity;
+	Light(glm::vec3 p, glm::vec3 c,float i) : pos(p), color(c),intensity(i) {}
 	Light() = default;
 };
 
 struct Sphere{
-	Vec pos;
-	double radius;
+	glm::vec3 pos;
+	float radius;
 	Material material;
 	
-	Sphere(Vec c, double r, Material mat) : pos(c), radius(r), material(mat) {}
+	Sphere(glm::vec3 c, float r, Material mat) : pos(c), radius(r), material(mat) {}
 	
-	bool intersect(Vec orig, Vec dir, double &t2){
-		double radius2 = radius * radius;
-		Vec L = pos - orig;
+	bool intersect(glm::vec3 orig, glm::vec3 dir, float &t2){
+		float radius2 = radius * radius;
+		glm::vec3 L = pos - orig;
 
-		double tca = L.dot(dir);
-		double d2 = L.square() - tca * tca;
+		float tca = glm::dot(L,dir);
+		float d2 = glm::dot(L, L) - tca * tca;
 
 		if (d2 > radius2) return false;
 
-		double thc = sqrtf(radius2 - d2);
+		float thc = sqrtf(radius2 - d2);
 
-		double t0 = tca - thc;
-		double t1 = tca + thc;
+		float t0 = tca - thc;
+		float t1 = tca + thc;
 
 		if (t0 > t1) std::swap(t0, t1);
 		if (t0 < 0) {
@@ -106,65 +71,84 @@ struct Sphere{
 	}
 };
 
-bool sceneIntersection(Vec orig, Vec dir, std::vector<Sphere> spheres, Material &objMat, Vec &hitPoint, Vec &normal){
-	double sphere_dist = std::numeric_limits<double>::max();
+bool sceneIntersection(glm::vec3 orig, glm::vec3 dir, std::vector<Sphere> spheres, Material &objMat, glm::vec3 &hitPoint, glm::vec3 &normal){
+	float sphere_dist = std::numeric_limits<float>::max();
 	for(size_t i = 0; i < spheres.size(); i++){
-		double dist_i = 0.0;
+		float dist_i = 0.0f;
 		if(spheres[i].intersect(orig, dir, dist_i) && dist_i < sphere_dist){
 			sphere_dist = dist_i;
 			hitPoint = orig + dir * dist_i;
-			normal = (hitPoint - spheres[i].pos).normalize();
+			normal = glm::normalize(hitPoint - spheres[i].pos);
 			objMat = spheres[i].material;
 		}
 	}
-    return sphere_dist<1000;
+    float checkerboard_dist = std::numeric_limits<float>::max();
+    if (fabs(dir.y)>1e-3)  {
+        float d = -(orig.y+5)/dir.y; // the checkerboard plane has equation y = -4
+        glm::vec3 pt = orig + dir*d;
+        if (d>0 && fabs(pt.x)<10 && pt.z<-10 && pt.z>-30 && d< sphere_dist) {
+            checkerboard_dist = d;
+            hitPoint = pt;
+            normal = glm::vec3(0,1,0);
+            objMat.color = (int(.5f*hitPoint.x+1000) + int(.5f*hitPoint.z)) & 1 ? glm::vec3(1,1,1) : glm::vec3(.3, 1.0, .7);
+            objMat.color = objMat.color * .3f;
+			objMat.reflective = false;
+        }
+    }
+    return std::min(sphere_dist, checkerboard_dist)<1000;
 }
 
-Vec cast_ray(Vec orig, Vec dir, std::vector<Sphere> spheres, std::vector<Light> lights) {
-	Vec hitPoint = Vec(), normal = Vec();
+glm::vec3 cast_ray(glm::vec3 orig, glm::vec3 dir, std::vector<Sphere> spheres, std::vector<Light> lights, size_t depth = 0) {
+	glm::vec3 hitPoint = glm::vec3(), normal = glm::vec3();
 	Material obtMat;
 	
-    if (!sceneIntersection(orig, dir, spheres, obtMat, hitPoint, normal)) {
-        return Vec(0.5, 0.6, 5.0); // BG color!
+    if (depth > 16 || !sceneIntersection(orig, dir, spheres, obtMat, hitPoint, normal)) {
+        return glm::vec3(0.5f, 0.6f, 0.7f); // BG color!
     }
-	double totalDt = 0.0;
+	
+	glm::vec3 reflect_dir = glm::normalize(glm::reflect(dir, normal));
+    glm::vec3 reflect_orig = glm::dot(reflect_dir, normal) < 0 ? hitPoint - normal * 1e-3f : hitPoint + normal * 1e-3f;
+    glm::vec3 reflect_color = cast_ray(reflect_orig, reflect_dir, spheres, lights, depth + 1);
+	
+	float totalDt = 0.0f, totalSpecular = 0.0f;
 	for(size_t i = 0; i < lights.size(); i++){
-		Vec L = (lights[i].pos - hitPoint).normalize();
-		double lightDist = (lights[i].pos - hitPoint).length();
+		glm::vec3 L = glm::normalize(lights[i].pos - hitPoint);
+		float lightDist = glm::length(lights[i].pos - hitPoint);
 		
-		Vec shadow_orig = L.dot(normal) < 0 ? hitPoint - normal * 1e-3 : hitPoint + normal * 1e-3;
-        Vec shadow_pt, shadow_N;
+		glm::vec3 shadow_orig = glm::dot(L,normal) < 0 ? hitPoint - normal * 1e-3f : hitPoint + normal * 1e-3f;
+        glm::vec3 shadow_pt, shadow_N;
         Material tmpmaterial;
-        if (sceneIntersection(shadow_orig, L, spheres, tmpmaterial, shadow_pt, shadow_N) && (shadow_pt-shadow_orig).length() < lightDist)
+        if (sceneIntersection(shadow_orig, L, spheres, tmpmaterial, shadow_pt, shadow_N) && glm::length(shadow_pt-shadow_orig) < lightDist)
             continue;
-		
-		totalDt += lights[i].intensity * std::max(0.0, L.dot(normal));
+		totalDt += lights[i].intensity * std::max(0.f, glm::dot(L, normal));
+		totalSpecular += powf(std::max(0.0f, glm::dot(-glm::reflect(-L, normal), dir)),obtMat.specualirity) * lights[i].intensity;
 	}
 	
-	return obtMat.color * totalDt;
+	return (obtMat.reflective == true ? reflect_color * totalDt : obtMat.color * totalDt + glm::vec3(1.0f) * std::floor(totalSpecular));
 }
 
-RGB convertVec(Vec d){
-	return RGB(std::round(d.x * 255.0), std::round(d.y * 255.0), std::round(d.z * 255.0));
+RGB convertVec(glm::vec3 d){
+	return RGB(std::round(d.x * 255.0f), std::round(d.y * 255.0f), std::round(d.z * 255.0f));
 }
 
 int main() {
    RGB data[width * height];
    
-   Material reddy(Vec(0.5, 0.2, 0.3));
-   Material bluey(Vec(0.2, 0.3, 0.5));
-   Material greeny(Vec(0.3, 0.5, 0.2));
+   Material reddy(glm::vec3(0.5f, 0.2f, 0.3f), 0.9f, false);
+   Material bluey(glm::vec3(0.2f, 0.3f, 0.5f), 0.86f, true);
+   Material greeny(glm::vec3(0.3f, 0.5f, 0.2f), 0.97f, false);
    
    std::vector<Sphere> spheres;
-   spheres.push_back(Sphere(Vec(0, 0, -14), 2, reddy));
-   spheres.push_back(Sphere(Vec(1, 1.2, -17), 2, bluey));
-   spheres.push_back(Sphere(Vec(-2, 2, -5), 1.2, greeny));
-   spheres.push_back(Sphere(Vec(3, -3, -10), 2.1, greeny));
+   spheres.push_back(Sphere(glm::vec3(0.0f, 0.0f, -14.0f), 2.0f, reddy));
+   spheres.push_back(Sphere(glm::vec3(1.0f, 1.2f, -17.0f), 2.0f, bluey));
+   spheres.push_back(Sphere(glm::vec3(-2.0f, 2.0f, -5.0f), 1.2f, greeny));
+   spheres.push_back(Sphere(glm::vec3(4.0f, -3.0f, -10.0f), 2.1f, greeny));
+   spheres.push_back(Sphere(glm::vec3(2.2f, -3.0f, -16.0f), 3.0f, bluey));
    
    std::vector<Light> lights;
-   lights.push_back(Light(Vec(0, 0, -5), 1.4));
+   lights.push_back(Light(glm::vec3(0.0f, 0.0f, -5.0f), glm::vec3(0.2f, 0.5f, 0.3f),1.4f));
 
-   double fov = 3.141596 / 4.0;
+   float fov = 3.141596f / 4.0f;
    auto timeThen = std::chrono::system_clock::now(), timeNow = std::chrono::system_clock::now();
    float elapsedTime = 0.0f;
 
@@ -176,10 +160,10 @@ int main() {
 		   float deltaTime = deltaChrono.count();
 		
 		   int currentPos = i + j * width;
-		   double x =  (2*(i + 0.5)/(double)width  - 1)*tan(fov/2.)*width/(double)height;
-           double y = -(2*(j + 0.5)/(double)height - 1)*tan(fov/2.);
-           Vec dir = Vec(x, y, -1).normalize();
-		   data[currentPos] = convertVec(cast_ray(Vec(), dir, spheres, lights));
+		   float x =  (2*(i + 0.5f)/(float)width  - 1)*tan(fov/2.0f)*width/(float)height;
+           float y = -(2*(j + 0.5f)/(float)height - 1)*tan(fov/2.0f);
+           glm::vec3 dir = glm::normalize(glm::vec3(x, y, -1));
+		   data[currentPos] = convertVec(cast_ray(glm::vec3(), dir, spheres, lights));
 		   
 		   elapsedTime += deltaTime;
 	   }
