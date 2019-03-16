@@ -16,5 +16,7 @@ Run build.bat.
 * Reflections (comes with free artifacting)
 * One plane (that's all you get. don't ask me for more. i'm out of planes.)
 
+![Yeet](https://cdn.discordapp.com/attachments/380799075538305025/556274290509742090/render.png)
+
 # Does it run fast?
 I put in a small timer with chrono so you can see how much time it takes to run things.
