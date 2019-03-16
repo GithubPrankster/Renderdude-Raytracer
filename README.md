@@ -3,7 +3,8 @@ A raytracer.
 
 -Dependencies of Renderdude: Raytracer
 
-* GCC: Most recent is best.
+* GCC: Most recent is best. **Utilizes OpenMP.**
+* GLM: 0.9.8.5 nicest.
 * Nothings' stb_image_write is used.
 
 -How to Compile Renderdude: Raytracer
@@ -14,9 +15,12 @@ Run build.bat.
 
 * Lightning (y'all wanted it)
 * Reflections (comes with free artifacting)
-* One plane (that's all you get. don't ask me for more. i'm out of planes.)
+* Refractions (w o b b l y)
+* Even more spheres (sphere)
+* Materials (choose between not so shiny, shiny and space warper!)
 
 ![Yeet](https://cdn.discordapp.com/attachments/380799075538305025/556274290509742090/render.png)
+![MegaYeet](https://cdn.discordapp.com/attachments/386259864416157697/556327937687814185/render.png)
 
 # Does it run fast?
 I put in a small timer with chrono so you can see how much time it takes to run things.
