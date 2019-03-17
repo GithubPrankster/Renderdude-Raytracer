@@ -66,7 +66,6 @@ struct hitHistory{
 
 struct Light{
 	glm::vec3 pos;
-	//Color is not used yet.
 	glm::vec3 color;
 	float intensity;
 	Light(glm::vec3 p, glm::vec3 c,float i) : pos(p), color(c),intensity(i) {}
@@ -156,35 +155,41 @@ glm::vec3 clampRay(glm::vec3 col){
 }
 
 glm::vec3 cast_ray(Ray ray, std::vector<Object*> stuff, std::vector<Light> lights, size_t depth = 0) {
+	float numericalMinimum = 1e-3f;
 	hitHistory rayHistory;
     if (depth > 8 || !sceneIntersection(ray, stuff, rayHistory)) {
         return glm::vec3(0.0f, 0.0f, 0.0f); // BG color!
     }
 	
 	glm::vec3 reflect_dir = glm::normalize(glm::reflect(ray.dir, rayHistory.normal));
-    glm::vec3 reflect_orig = glm::dot(reflect_dir, rayHistory.normal) < 0 ? rayHistory.hitPoint - rayHistory.normal * 1e-3f : rayHistory.hitPoint + rayHistory.normal * 1e-3f;
+    glm::vec3 reflect_orig = glm::dot(reflect_dir, rayHistory.normal) < 0 ? rayHistory.hitPoint - rayHistory.normal * numericalMinimum : rayHistory.hitPoint + rayHistory.normal * numericalMinimum;
     glm::vec3 reflect_color = cast_ray(Ray(reflect_orig, reflect_dir), stuff, lights, depth + 1);
 	
 	float totalDt = 0.0f, totalSpecular = 0.0f;
+	glm::vec3 lightColor;
 	for(size_t i = 0; i < lights.size(); i++){
 		glm::vec3 L = glm::normalize(lights[i].pos - rayHistory.hitPoint);
 		float lightDist = glm::length(lights[i].pos - rayHistory.hitPoint);
+		float attenuation = (1.0f + pow(lightDist / 32.0f, lights[i].intensity));
 		
-		Ray shadowRay(glm::dot(L,rayHistory.normal) < 0 ? rayHistory.hitPoint - rayHistory.normal * 1e-3f : rayHistory.hitPoint + rayHistory.normal * 1e-3f, L);
+		Ray shadowRay(glm::dot(L,rayHistory.normal) < 0 ? rayHistory.hitPoint - rayHistory.normal * numericalMinimum : rayHistory.hitPoint + rayHistory.normal * numericalMinimum, L);
 		hitHistory shadowHist;
 		
         if (sceneIntersection(shadowRay, stuff, shadowHist) && glm::length(shadowHist.hitPoint - shadowRay.orig) < lightDist){
-			totalDt += (lights[i].intensity * std::max(0.f, glm::dot(L, rayHistory.normal))) - 0.3;
-			totalSpecular += (powf(std::max(0.0f, glm::dot(-glm::reflect(-L, rayHistory.normal), ray.dir)),rayHistory.obtMat->specualirity) * lights[i].intensity) - 0.4;  
+			totalDt += ((lights[i].intensity * std::max(0.f, glm::dot(L, rayHistory.normal))) - 0.3) / attenuation;
+			totalSpecular += ((powf(std::max(0.0f, glm::dot(-glm::reflect(-L, rayHistory.normal), ray.dir)),rayHistory.obtMat->specualirity) * lights[i].intensity) - 0.4) / attenuation;  
 		}
 		else{
-			totalDt += lights[i].intensity * std::max(0.f, glm::dot(L, rayHistory.normal));
-			totalSpecular += powf(std::max(0.0f, glm::dot(-glm::reflect(-L, rayHistory.normal), ray.dir)),rayHistory.obtMat->specualirity) * lights[i].intensity;
+			totalDt += (lights[i].intensity * std::max(0.f, glm::dot(L, rayHistory.normal))) / attenuation;
+			totalSpecular += (powf(std::max(0.0f, glm::dot(-glm::reflect(-L, rayHistory.normal), ray.dir)),rayHistory.obtMat->specualirity) * lights[i].intensity) / attenuation;
 		}	
+		lightColor += lights[i].color * attenuation;
 	}
-	return clampRay(rayHistory.obtMat->type == Reflective ? reflect_color * totalDt * rayHistory.obtMat->pbrCtrl.z: 
-	rayHistory.obtMat->color * totalDt * rayHistory.obtMat->pbrCtrl.x + glm::vec3(1.0f) * 
-	std::floor(totalSpecular) * rayHistory.obtMat->pbrCtrl.y);
+	return clampRay(rayHistory.obtMat->type == Reflective ? reflect_color * totalDt * rayHistory.obtMat->pbrCtrl.z * lightColor: 
+	rayHistory.obtMat->color * totalDt * 
+	rayHistory.obtMat->pbrCtrl.x + glm::vec3(1.0f) * 
+	std::floor(totalSpecular) * 
+	rayHistory.obtMat->pbrCtrl.y * lightColor);
 }
 
 RGB convertVec(glm::vec3 d){
@@ -194,38 +199,38 @@ RGB convertVec(glm::vec3 d){
 int main() {
    RGB data[width * height];
    
-   Material reddy(glm::vec3(0.9, 0.3, 0.1), glm::vec3(0.5f, 0.2f, 0.3f), 1.2f, Diffuse);
+   Material reddy(glm::vec3(0.9, 0.01, 0.1), glm::vec3(0.5f, 0.2f, 0.3f), 0.9f, Diffuse);
    Material bluey(glm::vec3(0.95, 0.8, 0.9), glm::vec3(0.2f, 0.3f, 0.5f), 6.0f, Reflective);
-   Material greeny(glm::vec3(0.6, 0.1, 0.2), glm::vec3(0.3f, 0.5f, 0.2f), 1.0f, Diffuse);
-   Material thingy(glm::vec3(0.6, 0.5, 0.1), glm::vec3(0.5f, 0.4f, 0.6f), 1.5f, Diffuse);
+   Material greeny(glm::vec3(0.8, 0.1, 0.2), glm::vec3(0.3f, 0.5f, 0.2f), 1.0f, Diffuse);
+   Material thingy(glm::vec3(0.7, 0.1, 0.1), glm::vec3(0.5f, 0.4f, 0.6f), 1.2f, Diffuse);
    
    std::vector<Object*> stuff;
-   stuff.push_back(new Sphere(glm::vec3(0.0f, 0.0f, -14.0f), 2.0f, reddy));
+   stuff.push_back(new Sphere(glm::vec3(0.0f, -1.0f, -14.0f), 2.0f, reddy));
    
-   stuff.push_back(new Sphere(glm::vec3(-2.0f, 2.0f, -15.0f), 1.2f, bluey));
-   stuff.push_back(new Sphere(glm::vec3(2.0f, -2.0f, -15.0f), 1.2f, bluey));
+   stuff.push_back(new Sphere(glm::vec3(5.0f, -2.0f, -15.0f), 1.2f, bluey));
+   stuff.push_back(new Sphere(glm::vec3(-3.0f, -2.0f, -10.0f), 1.2f, bluey));
    
-   stuff.push_back(new Sphere(glm::vec3(2.0f, 2.0f, -15.0f), 1.2f, bluey));
-   stuff.push_back(new Sphere(glm::vec3(-2.0f, -2.0f, -15.0f), 1.2f, bluey));
+   stuff.push_back(new Sphere(glm::vec3(3.2f, -2.0f, -9.4f), 1.2f, bluey));
+   stuff.push_back(new Sphere(glm::vec3(-4.0f, -2.0f, -15.0f), 1.2f, bluey));
    
    stuff.push_back(new Plane(glm::vec3(0.0f, -4.0f, -5.0f), glm::vec3(0.0f, 1.0f, 0.0f), reddy));
    stuff.push_back(new Plane(glm::vec3(0.0f, 6.0f, -5.0f), glm::vec3(0.0f, -1.0f, 0.0f), greeny));
    
-   stuff.push_back(new Plane(glm::vec3(5.0f, 0.0f, -5.0f), glm::vec3(-1.0f, 0.0f, 0.0f), bluey));
-   stuff.push_back(new Plane(glm::vec3(-5.0f, 0.0f, -5.0f), glm::vec3(1.0f, 0.0f, 0.0f), bluey));
+   stuff.push_back(new Plane(glm::vec3(17.0f, 0.0f, -5.0f), glm::vec3(-1.0f, 0.0f, 0.0f), bluey));
+   stuff.push_back(new Plane(glm::vec3(-17.0f, 0.0f, -5.0f), glm::vec3(1.0f, 0.0f, 0.0f), bluey));
    
-   stuff.push_back(new Plane(glm::vec3(0.0f, 0.0f, -17.0f), glm::vec3(0.0f, 0.0f, 1.0f), thingy));
-   stuff.push_back(new Plane(glm::vec3(0.0f, 0.0f, 10.0f), glm::vec3(0.0f, 0.0f, -1.0f), thingy));
+   stuff.push_back(new Plane(glm::vec3(0.0f, 0.0f, -24.0f), glm::vec3(0.0f, 0.0f, 1.0f), thingy));
+   stuff.push_back(new Plane(glm::vec3(0.0f, 0.0f, 17.0f), glm::vec3(0.0f, 0.0f, -1.0f), thingy));
   
-   
    std::vector<Light> lights;
-   lights.push_back(Light(glm::vec3(0.6f, 0.6f, -5.0f), glm::vec3(0.2f, 0.5f, 0.3f),1.4f));
+   lights.push_back(Light(glm::vec3(0.6f, 4.0f, 5.0f), glm::vec3(0.4f, 0.2f, 0.3f),1.0f));
+   lights.push_back(Light(glm::vec3(3.1f, 1.9f, -6.0f), glm::vec3(0.2f, 0.4f, 0.2f),1.3f));
 
    float fov = 3.141596f / 4.0f;
    auto timeThen = std::chrono::system_clock::now(), timeNow = std::chrono::system_clock::now();
    float elapsedTime = 0.0f;
 
-   #pragma omp parallel for
+   #pragma omp parallel for schedule(dynamic)
    for(int i = 0; i < width;  i++){
 	   for(int j = 0; j < height; j++){
 		   timeNow = std::chrono::system_clock::now();
@@ -237,7 +242,7 @@ int main() {
 		   float x =  (2*(i + 0.5f)/(float)width  - 1)*tan(fov/2.0f)*width/(float)height;
            float y = -(2*(j + 0.5f)/(float)height - 1)*tan(fov/2.0f);
            glm::vec3 dir = glm::normalize(glm::vec3(x, y, -1));
-		   Ray currentRay(glm::vec3(0.0, 1.0, 0.0), dir);
+		   Ray currentRay(glm::vec3(0.0, 1.0, 3.0), dir);
 		   data[currentPos] = convertVec(cast_ray(currentRay, stuff, lights));
 		   
 		   elapsedTime += deltaTime;
