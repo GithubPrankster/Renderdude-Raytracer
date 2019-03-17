@@ -47,11 +47,6 @@ struct Ray{
 	Ray(glm::vec3 o, glm::vec3 d) : orig(o), dir(d) {}
 };
 
-//Class will be used for The Objective Update
-class Object{
-	virtual bool intersect(Ray ray, float &dist) const = 0;
-};
-
 struct Material{
 	glm::vec3 pbrCtrl = glm::vec3(1.0, 1.0, 0.0);
 	glm::vec3 color;
@@ -78,12 +73,19 @@ struct Light{
 	Light() = default;
 };
 
-struct Sphere{
+struct Object{
 	glm::vec3 pos;
-	float radius;
 	Material material;
+	Object(glm::vec3 p, Material mat) : pos(p), material(mat) {}
+	Object() = default;
+	virtual bool intersect(Ray ray, float &dist) = 0;
+	virtual glm::vec3 getNormal(Ray ray, float dist) = 0;
+};
+
+struct Sphere : Object{
+	float radius;
 	
-	Sphere(glm::vec3 c, float r, Material mat) : pos(c), radius(r), material(mat) {}
+	Sphere (glm::vec3 c, float r, Material mat) : Object(c, mat), radius(r)  {}
 	
 	bool intersect(Ray ray, float &t2){
 		float radius2 = radius * radius;
@@ -107,15 +109,16 @@ struct Sphere{
 		t2 = t0;
 		return true;
 	}
+	
+	glm::vec3 getNormal(Ray ray, float dist){
+		glm::vec3 hitPoint = ray.orig + ray.dir * dist;
+		return glm::normalize(hitPoint - pos);
+	}
 };
 
-//Yes, plane.
-struct Plane{
-	glm::vec3 pos;
+struct Plane : Object{
 	glm::vec3 normal;
-	Material material;
-	
-	Plane(glm::vec3 p, glm::vec3 n, Material mat) : pos(p), normal(n), material(mat) {}
+	Plane(glm::vec3 p, glm::vec3 n, Material mat) : Object(p, mat), normal(n) {}
 	
 	bool intersect(Ray ray, float &dist){
 		float denom = glm::dot(normal, ray.dir);
@@ -126,33 +129,22 @@ struct Plane{
 		}
 		return false;
 	}
+	glm::vec3 getNormal(Ray ray, float dist){
+		return normal;
+	}
 };
 
-bool sceneIntersection(Ray ray, std::vector<Sphere> spheres, std::vector<Plane> planes, hitHistory &history){
-	float sphere_dist = std::numeric_limits<float>::max();
-	for(size_t i = 0; i < spheres.size(); i++){
+bool sceneIntersection(Ray ray, std::vector<Object*> stuff, hitHistory &history){
+	float stuff_dist = std::numeric_limits<float>::max();
+	for(auto &object : stuff){
 		float dist_i = 0.0f;
-		if(spheres[i].intersect(ray, dist_i) && dist_i < sphere_dist){
-			sphere_dist = dist_i;
-			glm::vec3 hitPoint = ray.orig + ray.dir * dist_i;
-			glm::vec3 normal = glm::normalize(hitPoint - spheres[i].pos);
-			hitHistory gotHist(dist_i, hitPoint, normal, spheres[i].material);
+		if(object->intersect(ray, dist_i) && dist_i < stuff_dist){
+			stuff_dist = dist_i;
+			hitHistory gotHist(dist_i, ray.orig + ray.dir * dist_i, object->getNormal(ray, dist_i), object->material);
 			history = gotHist;
 		}
 	}
-	//Plane!
-	float toSphere_dist = std::numeric_limits<float>::max();
-	for(size_t i = 0; i < planes.size(); i++){
-		float dist_i = 0.0f;
-		if(planes[i].intersect(ray, dist_i) && dist_i < sphere_dist){
-			toSphere_dist = dist_i;
-			glm::vec3 hitPoint = ray.orig + ray.dir * dist_i;
-			glm::vec3 normal = glm::normalize(planes[i].normal);
-			hitHistory gotHist(dist_i, hitPoint, normal, planes[i].material);
-			history = gotHist;
-		}
-	}
-    return std::min(sphere_dist, toSphere_dist)< std::numeric_limits<float>::max();
+    return stuff_dist < std::numeric_limits<float>::max();
 }
 
 glm::vec3 clampRay(glm::vec3 col){
@@ -163,15 +155,15 @@ glm::vec3 clampRay(glm::vec3 col){
 	return res;
 }
 
-glm::vec3 cast_ray(Ray ray, std::vector<Sphere> spheres, std::vector<Plane> planes, std::vector<Light> lights, size_t depth = 0) {
+glm::vec3 cast_ray(Ray ray, std::vector<Object*> stuff, std::vector<Light> lights, size_t depth = 0) {
 	hitHistory rayHistory;
-    if (depth > 8 || !sceneIntersection(ray, spheres, planes, rayHistory)) {
+    if (depth > 8 || !sceneIntersection(ray, stuff, rayHistory)) {
         return glm::vec3(0.0f, 0.0f, 0.0f); // BG color!
     }
 	
 	glm::vec3 reflect_dir = glm::normalize(glm::reflect(ray.dir, rayHistory.normal));
     glm::vec3 reflect_orig = glm::dot(reflect_dir, rayHistory.normal) < 0 ? rayHistory.hitPoint - rayHistory.normal * 1e-3f : rayHistory.hitPoint + rayHistory.normal * 1e-3f;
-    glm::vec3 reflect_color = cast_ray(Ray(reflect_orig, reflect_dir), spheres, planes, lights, depth + 1);
+    glm::vec3 reflect_color = cast_ray(Ray(reflect_orig, reflect_dir), stuff, lights, depth + 1);
 	
 	float totalDt = 0.0f, totalSpecular = 0.0f;
 	for(size_t i = 0; i < lights.size(); i++){
@@ -180,13 +172,14 @@ glm::vec3 cast_ray(Ray ray, std::vector<Sphere> spheres, std::vector<Plane> plan
 		
 		Ray shadowRay(glm::dot(L,rayHistory.normal) < 0 ? rayHistory.hitPoint - rayHistory.normal * 1e-3f : rayHistory.hitPoint + rayHistory.normal * 1e-3f, L);
 		hitHistory shadowHist;
-        if (sceneIntersection(shadowRay, spheres, planes, shadowHist) && glm::length(shadowHist.hitPoint - shadowRay.orig) < lightDist){
+		
+        if (sceneIntersection(shadowRay, stuff, shadowHist) && glm::length(shadowHist.hitPoint - shadowRay.orig) < lightDist){
 			totalDt += (lights[i].intensity * std::max(0.f, glm::dot(L, rayHistory.normal))) - 0.3;
-			totalSpecular += (powf(std::max(0.0f, glm::dot(-glm::reflect(-L, rayHistory.normal), ray.dir)),rayHistory.obtMat->specualirity) * lights[i].intensity) - 0.4; //distribution(generator)) - 0.4;   
+			totalSpecular += (powf(std::max(0.0f, glm::dot(-glm::reflect(-L, rayHistory.normal), ray.dir)),rayHistory.obtMat->specualirity) * lights[i].intensity) - 0.4;  
 		}
 		else{
 			totalDt += lights[i].intensity * std::max(0.f, glm::dot(L, rayHistory.normal));
-			totalSpecular += powf(std::max(0.0f, glm::dot(-glm::reflect(-L, rayHistory.normal), ray.dir)),rayHistory.obtMat->specualirity) * lights[i].intensity; //- distribution(generator);
+			totalSpecular += powf(std::max(0.0f, glm::dot(-glm::reflect(-L, rayHistory.normal), ray.dir)),rayHistory.obtMat->specualirity) * lights[i].intensity;
 		}	
 	}
 	return clampRay(rayHistory.obtMat->type == Reflective ? reflect_color * totalDt * rayHistory.obtMat->pbrCtrl.z: 
@@ -204,20 +197,26 @@ int main() {
    Material reddy(glm::vec3(0.9, 0.3, 0.1), glm::vec3(0.5f, 0.2f, 0.3f), 1.2f, Diffuse);
    Material bluey(glm::vec3(0.95, 0.8, 0.9), glm::vec3(0.2f, 0.3f, 0.5f), 6.0f, Reflective);
    Material greeny(glm::vec3(0.6, 0.1, 0.2), glm::vec3(0.3f, 0.5f, 0.2f), 1.0f, Diffuse);
+   Material thingy(glm::vec3(0.6, 0.5, 0.1), glm::vec3(0.5f, 0.4f, 0.6f), 1.5f, Diffuse);
    
-   std::vector<Sphere> spheres;
-   spheres.push_back(Sphere(glm::vec3(0.0f, 0.0f, -14.0f), 2.0f, reddy));
+   std::vector<Object*> stuff;
+   stuff.push_back(new Sphere(glm::vec3(0.0f, 0.0f, -14.0f), 2.0f, reddy));
    
-   spheres.push_back(Sphere(glm::vec3(-2.0f, 2.0f, -15.0f), 1.2f, bluey));
-   spheres.push_back(Sphere(glm::vec3(2.0f, -2.0f, -15.0f), 1.2f, bluey));
+   stuff.push_back(new Sphere(glm::vec3(-2.0f, 2.0f, -15.0f), 1.2f, bluey));
+   stuff.push_back(new Sphere(glm::vec3(2.0f, -2.0f, -15.0f), 1.2f, bluey));
    
-   spheres.push_back(Sphere(glm::vec3(2.0f, 2.0f, -15.0f), 1.2f, bluey));
-   spheres.push_back(Sphere(glm::vec3(-2.0f, -2.0f, -15.0f), 1.2f, bluey));
+   stuff.push_back(new Sphere(glm::vec3(2.0f, 2.0f, -15.0f), 1.2f, bluey));
+   stuff.push_back(new Sphere(glm::vec3(-2.0f, -2.0f, -15.0f), 1.2f, bluey));
    
-   //Plane!
-   std::vector<Plane> planes;
-   planes.push_back(Plane(glm::vec3(0.0f, -4.0f, -5.0f), glm::vec3(0.0f, 1.0f, 0.0f), reddy));
-   planes.push_back(Plane(glm::vec3(0.0f, 8.0f, -5.0f), glm::vec3(0.0f, -1.0f, 0.0f), greeny));
+   stuff.push_back(new Plane(glm::vec3(0.0f, -4.0f, -5.0f), glm::vec3(0.0f, 1.0f, 0.0f), reddy));
+   stuff.push_back(new Plane(glm::vec3(0.0f, 6.0f, -5.0f), glm::vec3(0.0f, -1.0f, 0.0f), greeny));
+   
+   stuff.push_back(new Plane(glm::vec3(5.0f, 0.0f, -5.0f), glm::vec3(-1.0f, 0.0f, 0.0f), bluey));
+   stuff.push_back(new Plane(glm::vec3(-5.0f, 0.0f, -5.0f), glm::vec3(1.0f, 0.0f, 0.0f), bluey));
+   
+   stuff.push_back(new Plane(glm::vec3(0.0f, 0.0f, -17.0f), glm::vec3(0.0f, 0.0f, 1.0f), thingy));
+   stuff.push_back(new Plane(glm::vec3(0.0f, 0.0f, 10.0f), glm::vec3(0.0f, 0.0f, -1.0f), thingy));
+  
    
    std::vector<Light> lights;
    lights.push_back(Light(glm::vec3(0.6f, 0.6f, -5.0f), glm::vec3(0.2f, 0.5f, 0.3f),1.4f));
@@ -238,8 +237,8 @@ int main() {
 		   float x =  (2*(i + 0.5f)/(float)width  - 1)*tan(fov/2.0f)*width/(float)height;
            float y = -(2*(j + 0.5f)/(float)height - 1)*tan(fov/2.0f);
            glm::vec3 dir = glm::normalize(glm::vec3(x, y, -1));
-		   Ray currentRay(glm::vec3(), dir);
-		   data[currentPos] = convertVec(cast_ray(currentRay, spheres, planes, lights));
+		   Ray currentRay(glm::vec3(0.0, 1.0, 0.0), dir);
+		   data[currentPos] = convertVec(cast_ray(currentRay, stuff, lights));
 		   
 		   elapsedTime += deltaTime;
 	   }
