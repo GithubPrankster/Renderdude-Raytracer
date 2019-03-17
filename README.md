@@ -20,7 +20,7 @@ Run build.bat.
 * Planes (popular request by many spheres for a friend that isn't a sphere)
 * Materials (choose between not so shiny, shiny and space warper!)
 
-![Yeet](https://cdn.discordapp.com/attachments/386259864416157697/556543477509521410/render.png)
+![Yeet](https://cdn.discordapp.com/attachments/103875996138102784/556928310354116608/render.png)
 ![MegaYeet](https://cdn.discordapp.com/attachments/386259864416157697/556327937687814185/render.png)
 
 # Does it run fast?
