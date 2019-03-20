@@ -14,6 +14,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/transform.hpp>
 #include <glm/gtx/euler_angles.hpp>
+#include <glm/gtc/constants.hpp>
 
 const int width = 880, height = 720;
 
@@ -39,7 +40,7 @@ struct RGB{
 
 //Soon materials will have more meaning. Right now only Diffuse and Reflective are used.
 enum MaterialType{
-	Diffuse, Specular, Reflective, Emissive
+	Diffuse, Specular, Reflective, Checkered, SphereCheckered, Textured
 };
 
 struct Ray{
@@ -52,8 +53,19 @@ struct Material{
 	glm::vec3 color;
 	float specualirity;
 	MaterialType type;
+	
 	Material(glm::vec3 throttle, glm::vec3 diff, float specular, MaterialType t) : pbrCtrl(throttle), color(diff), specualirity(specular), type(t) {}
 	Material() = default;
+	
+	glm::vec3 returnCheckered(glm::vec3 hit){
+		return (int(.8*hit.x+1000) + int(.8*hit.z)) & 1 ? glm::vec3(0.1f) : color;
+	}
+	
+	glm::vec3 returnSphereCheckered(glm::vec3 normal){
+		glm::vec2 uv = glm::vec2(glm::atan(normal.x, normal.z) / (2.0f * glm::pi<float>()) + 0.5f, glm::asin(normal.y) / glm::pi<float>() + 0.5f); 
+		
+		return (int)(floor(16.0f * uv.x) + floor(10.0f * uv.y)) % 2 ? glm::vec3(0.9f) : color;
+	}
 };
 
 struct hitHistory{
@@ -156,6 +168,7 @@ glm::vec3 clampRay(glm::vec3 col){
 
 glm::vec3 cast_ray(Ray ray, std::vector<Object*> stuff, std::vector<Light> lights, size_t depth = 0) {
 	float numericalMinimum = 1e-3f;
+	glm::vec3 finalColor;
 	hitHistory rayHistory;
     if (depth > 8 || !sceneIntersection(ray, stuff, rayHistory)) {
         return glm::vec3(0.0f, 0.0f, 0.0f); // BG color!
@@ -185,11 +198,33 @@ glm::vec3 cast_ray(Ray ray, std::vector<Object*> stuff, std::vector<Light> light
 		}	
 		lightColor += lights[i].color * attenuation;
 	}
-	return clampRay(rayHistory.obtMat->type == Reflective ? reflect_color * totalDt * rayHistory.obtMat->pbrCtrl.z * lightColor: 
-	rayHistory.obtMat->color * totalDt * 
-	rayHistory.obtMat->pbrCtrl.x + glm::vec3(1.0f) * 
-	std::floor(totalSpecular) * 
-	rayHistory.obtMat->pbrCtrl.y * lightColor);
+	switch(rayHistory.obtMat->type){
+		case Reflective:
+			finalColor = reflect_color * totalDt * rayHistory.obtMat->pbrCtrl.z * lightColor;
+			break;
+		case Checkered:
+			finalColor = rayHistory.obtMat->returnCheckered(rayHistory.hitPoint) * totalDt *
+						rayHistory.obtMat->pbrCtrl.x + (reflect_color * rayHistory.obtMat->pbrCtrl.z) 
+						+ glm::vec3(1.0f) * 
+						std::floor(totalSpecular) * 
+						rayHistory.obtMat->pbrCtrl.y * lightColor;
+			break;
+		case SphereCheckered:
+			finalColor = rayHistory.obtMat->returnSphereCheckered(rayHistory.normal) * totalDt *
+						rayHistory.obtMat->pbrCtrl.x + (reflect_color * rayHistory.obtMat->pbrCtrl.z) 
+						+ glm::vec3(1.0f) * 
+						std::floor(totalSpecular) * 
+						rayHistory.obtMat->pbrCtrl.y * lightColor;
+			break;
+		default:
+			finalColor = rayHistory.obtMat->color * totalDt * 
+						rayHistory.obtMat->pbrCtrl.x + glm::vec3(1.0f) * 
+						std::floor(totalSpecular) * 
+						rayHistory.obtMat->pbrCtrl.y * lightColor;
+			break;
+	}
+	return clampRay(finalColor);
+	
 }
 
 RGB convertVec(glm::vec3 d){
@@ -199,19 +234,22 @@ RGB convertVec(glm::vec3 d){
 int main() {
    RGB data[width * height];
    
-   Material reddy(glm::vec3(0.9, 0.01, 0.1), glm::vec3(0.5f, 0.2f, 0.3f), 0.9f, Diffuse);
+   Material reddy(glm::vec3(0.9, 0.01, 0.1), glm::vec3(0.5f, 0.2f, 0.3f), 0.9f, Checkered);
+   Material reddySphere(glm::vec3(0.9, 0.01, 0.3), glm::vec3(0.8f, 0.3f, 0.4f), 1.2f, SphereCheckered);
    Material bluey(glm::vec3(0.95, 0.8, 0.9), glm::vec3(0.2f, 0.3f, 0.5f), 6.0f, Reflective);
    Material greeny(glm::vec3(0.8, 0.1, 0.2), glm::vec3(0.3f, 0.5f, 0.2f), 1.0f, Diffuse);
    Material thingy(glm::vec3(0.7, 0.1, 0.1), glm::vec3(0.5f, 0.4f, 0.6f), 1.2f, Diffuse);
    
    std::vector<Object*> stuff;
-   stuff.push_back(new Sphere(glm::vec3(0.0f, -1.0f, -14.0f), 2.0f, reddy));
+   stuff.push_back(new Sphere(glm::vec3(0.0f, -2.0f, -14.0f), 2.0f, reddySphere));
    
-   stuff.push_back(new Sphere(glm::vec3(5.0f, -2.0f, -15.0f), 1.2f, bluey));
-   stuff.push_back(new Sphere(glm::vec3(-3.0f, -2.0f, -10.0f), 1.2f, bluey));
+   stuff.push_back(new Sphere(glm::vec3(5.0f, -3.0f, -15.0f), 1.2f, bluey));
+   stuff.push_back(new Sphere(glm::vec3(-3.0f, -3.0f, -10.0f), 1.2f, bluey));
    
-   stuff.push_back(new Sphere(glm::vec3(3.2f, -2.0f, -9.4f), 1.2f, bluey));
-   stuff.push_back(new Sphere(glm::vec3(-4.0f, -2.0f, -15.0f), 1.2f, bluey));
+   stuff.push_back(new Sphere(glm::vec3(3.2f, -3.0f, -9.4f), 1.2f, bluey));
+   stuff.push_back(new Sphere(glm::vec3(-4.0f, -3.0f, -15.0f), 1.2f, bluey));
+   stuff.push_back(new Sphere(glm::vec3(-6.0f, -3.0f, -11.0f), 1.2f, bluey));
+   stuff.push_back(new Sphere(glm::vec3(6.0f, -3.0f, -11.0f), 1.2f, bluey));
    
    stuff.push_back(new Plane(glm::vec3(0.0f, -4.0f, -5.0f), glm::vec3(0.0f, 1.0f, 0.0f), reddy));
    stuff.push_back(new Plane(glm::vec3(0.0f, 6.0f, -5.0f), glm::vec3(0.0f, -1.0f, 0.0f), greeny));
@@ -226,7 +264,7 @@ int main() {
    lights.push_back(Light(glm::vec3(0.6f, 4.0f, 5.0f), glm::vec3(0.4f, 0.2f, 0.3f),1.0f));
    lights.push_back(Light(glm::vec3(3.1f, 1.9f, -6.0f), glm::vec3(0.2f, 0.4f, 0.2f),1.3f));
 
-   float fov = 3.141596f / 4.0f;
+   float fov = glm::pi<float>() / 4.0f;
    auto timeThen = std::chrono::system_clock::now(), timeNow = std::chrono::system_clock::now();
    float elapsedTime = 0.0f;
 
@@ -241,8 +279,9 @@ int main() {
 		   int currentPos = i + j * width;
 		   float x =  (2*(i + 0.5f)/(float)width  - 1)*tan(fov/2.0f)*width/(float)height;
            float y = -(2*(j + 0.5f)/(float)height - 1)*tan(fov/2.0f);
-           glm::vec3 dir = glm::normalize(glm::vec3(x, y, -1));
-		   Ray currentRay(glm::vec3(0.0, 1.0, 3.0), dir);
+		   glm::mat3 rotMat = glm::rotate(glm::radians(15.0f), glm::vec3(0.0, 1.0, 0.0));
+           glm::vec3 dir = rotMat * glm::normalize(glm::vec3(x, y, -1));
+		   Ray currentRay(glm::vec3(4.2, 0.0, 3.0), dir);
 		   data[currentPos] = convertVec(cast_ray(currentRay, stuff, lights));
 		   
 		   elapsedTime += deltaTime;
