@@ -19,9 +19,11 @@ Run build.bat.
 * Planes (popular request by many spheres for a friend that isn't a sphere)
 * Materials (choose between not so shiny, shiny and reflect thing!)
 * Colored Lightning (it's like lightning with colors other than greyscale)
+* Checkers (Checkers)
+* Camera Rotation (Get them sick angles)
 
 ![Yeet](https://cdn.discordapp.com/attachments/380799075538305025/556974073541033984/render.png)
-![MegaYeet](https://cdn.discordapp.com/attachments/386259864416157697/556327937687814185/render.png)
+![MegaYeet](https://cdn.discordapp.com/attachments/380799075538305025/557725814272163862/render.png)
 
 # Does it run fast?
 I put in a small timer with chrono so you can see how much time it takes to run things. OpenMP also helps.
