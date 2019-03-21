@@ -24,7 +24,7 @@ Run build.bat.
 * Big resolutions (full hd!)
 * Multisampling Anti-Aliasing (no longer the (too) sharpest tool in the shed.)
 
-![Yeet](https://cdn.discordapp.com/attachments/380799075538305025/556974073541033984/render.png)
+![Yeet](https://cdn.discordapp.com/attachments/103875996138102784/558291903766986752/render.png)
 ![MegaYeet](https://cdn.discordapp.com/attachments/380799075538305025/557725814272163862/render.png)
 
 # Does it run fast?
