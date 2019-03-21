@@ -4,7 +4,6 @@
 #include <cmath>
 #include <limits>
 #include <chrono>
-#include <random>
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #define STBI_MSC_SECURE_CRT
 #include "stb_image_write.h"
@@ -16,11 +15,9 @@
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/gtc/constants.hpp>
 
-const int width = 880, height = 720;
+const int width = 1280, height = 720;
+const float samples = 4.0f;
 
-//std::random_device device;
-//std::mt19937 generator(device());
-//std::uniform_real_distribution<float> distribution(0.0f, 1.0f);
 //Rand unit sphere will be used for random direction stuff and whatnots
 //glm::vec3 randUnitSphere(){
 //	glm::vec3 point;
@@ -90,7 +87,7 @@ struct Object{
 	Object(glm::vec3 p, Material mat) : pos(p), material(mat) {}
 	Object() = default;
 	virtual bool intersect(Ray ray, float &dist) = 0;
-	virtual glm::vec3 getNormal(Ray ray, float dist) = 0;
+	virtual glm::vec3 getNormal(glm::vec3 hitPoint) = 0;
 };
 
 struct Sphere : Object{
@@ -121,8 +118,7 @@ struct Sphere : Object{
 		return true;
 	}
 	
-	glm::vec3 getNormal(Ray ray, float dist){
-		glm::vec3 hitPoint = ray.orig + ray.dir * dist;
+	glm::vec3 getNormal(glm::vec3 hitPoint){
 		return glm::normalize(hitPoint - pos);
 	}
 };
@@ -140,7 +136,7 @@ struct Plane : Object{
 		}
 		return false;
 	}
-	glm::vec3 getNormal(Ray ray, float dist){
+	glm::vec3 getNormal(glm::vec3 hitPoint){
 		return normal;
 	}
 };
@@ -151,7 +147,8 @@ bool sceneIntersection(Ray ray, std::vector<Object*> stuff, hitHistory &history)
 		float dist_i = 0.0f;
 		if(object->intersect(ray, dist_i) && dist_i < stuff_dist){
 			stuff_dist = dist_i;
-			hitHistory gotHist(dist_i, ray.orig + ray.dir * dist_i, object->getNormal(ray, dist_i), object->material);
+			glm::vec3 hitPoint = ray.orig + ray.dir * dist_i;
+			hitHistory gotHist(dist_i, hitPoint, object->getNormal(hitPoint), object->material);
 			history = gotHist;
 		}
 	}
@@ -231,8 +228,14 @@ RGB convertVec(glm::vec3 d){
 	return RGB(std::round(d.x * 255.0f), std::round(d.y * 255.0f), std::round(d.z * 255.0f));
 }
 
+glm::vec3 calculateWin(float fov, float x, float y){
+	float i =  (2*(x + 0.5f)/(float)width  - 1)*tan(fov/2.0f)*width/(float)height;
+    float j = -(2*(y + 0.5f)/(float)height - 1)*tan(fov/2.0f);
+	return glm::vec3(i, j, -1);
+}
+
 int main() {
-   RGB data[width * height];
+   RGB* data = new RGB[width * height];
    
    Material reddy(glm::vec3(0.9, 0.01, 0.1), glm::vec3(0.5f, 0.2f, 0.3f), 0.9f, Checkered);
    Material reddySphere(glm::vec3(0.9, 0.01, 0.3), glm::vec3(0.8f, 0.3f, 0.4f), 1.2f, SphereCheckered);
@@ -277,18 +280,25 @@ int main() {
 		   float deltaTime = deltaChrono.count();
 		
 		   int currentPos = i + j * width;
-		   float x =  (2*(i + 0.5f)/(float)width  - 1)*tan(fov/2.0f)*width/(float)height;
-           float y = -(2*(j + 0.5f)/(float)height - 1)*tan(fov/2.0f);
+		   
 		   glm::mat3 rotMat = glm::rotate(glm::radians(15.0f), glm::vec3(0.0, 1.0, 0.0));
-           glm::vec3 dir = rotMat * glm::normalize(glm::vec3(x, y, -1));
-		   Ray currentRay(glm::vec3(4.2, 0.0, 3.0), dir);
-		   data[currentPos] = convertVec(cast_ray(currentRay, stuff, lights));
+		   glm::vec3 finalResult;
+		   for(int sample = 0; sample < samples; sample++){
+			    float sampleX = (i + 0.5f + ((sample < 2) ? -0.25f : 0.25f)); 
+                float sampleY = (j + 0.5f + ((sample >= 2) ? -0.25f : 0.25f));
+				glm::vec3 dir = rotMat * glm::normalize(calculateWin(fov, sampleX, sampleY));
+				Ray currentRay(glm::vec3(4.2, 0.0, 3.0), dir);
+				finalResult += cast_ray(currentRay, stuff, lights);
+		   }
+           finalResult /= samples;
+		   data[currentPos] = convertVec(finalResult);
 		   
 		   elapsedTime += deltaTime;
 	   }
    }
    
-   stbi_write_png("render.png", width, height, 3, &data, 0);
+   stbi_write_png("render.png", width, height, 3, data, 0);
+   delete[] data;
    std::cout << elapsedTime << std::endl;
    return 0;
 }
