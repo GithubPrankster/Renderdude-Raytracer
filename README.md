@@ -1,5 +1,5 @@
 # Renderdude: Raytracer
-A raytracer done in a weekend
+A raytracer done in a weekend (and too many more)
 
 -Dependencies of Renderdude: Raytracer
 
