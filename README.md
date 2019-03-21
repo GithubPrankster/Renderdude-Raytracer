@@ -21,6 +21,8 @@ Run build.bat.
 * Colored Lightning (it's like lightning with colors other than greyscale)
 * Checkers (Checkers)
 * Camera Rotation (Get them sick angles)
+* Big resolutions (full hd!)
+* Multisampling Anti-Aliasing (no longer the (too) sharpest tool in the shed.)
 
 ![Yeet](https://cdn.discordapp.com/attachments/380799075538305025/556974073541033984/render.png)
 ![MegaYeet](https://cdn.discordapp.com/attachments/380799075538305025/557725814272163862/render.png)
